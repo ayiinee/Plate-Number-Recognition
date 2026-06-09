@@ -215,12 +215,20 @@ def render_camera_live(alpr, min_confidence, cooldown_seconds):
     st.subheader("Kamera Live")
 
     rtc_configuration = RTCConfiguration(
-        {
-            "iceServers": [
-                {"urls": ["stun:stun.l.google.com:19302"]},
-            ]
-        }
-    )
+    {
+        "iceServers": [
+            {
+                "urls": [
+                    "stun:stun.l.google.com:19302",
+                    "stun:stun1.l.google.com:19302",
+                    "stun:stun2.l.google.com:19302",
+                    "stun:stun3.l.google.com:19302",
+                    "stun:stun4.l.google.com:19302",
+                ]
+            }
+        ]
+    }
+)
 
     ctx = webrtc_streamer(
         key="alpr-camera",
