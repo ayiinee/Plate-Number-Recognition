@@ -1,0 +1,7 @@
+streamlit
+streamlit-webrtc
+opencv-python
+fast-alpr[onnx]
+pandas
+av
+numpy
