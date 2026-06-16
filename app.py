@@ -81,9 +81,9 @@ def render_summary(df):
         )
 
 
-def render_records_panel():
+def render_records_panel(min_confidence):
     store = st.session_state.record_store
-    df = store.to_dataframe()
+    df = store.to_dataframe(min_confidence=min_confidence)
 
     st.subheader("Record Plat Nomor")
     render_summary(df)
@@ -99,7 +99,7 @@ def render_records_panel():
 
         st.download_button(
             label="Download CSV",
-            data=store.to_csv_bytes(),
+            data=store.to_csv_bytes(min_confidence=min_confidence),
             file_name="hasil_deteksi_plat.csv",
             mime="text/csv",
         )
@@ -248,8 +248,12 @@ def render_camera_live(alpr, min_confidence, cooldown_seconds):
     result_placeholder = st.empty()
 
     if ctx.video_processor:
+        ctx.video_processor.update_min_confidence(min_confidence)
+
         while ctx.state.playing:
-            detections = ctx.video_processor.get_pending_results()
+            detections = ctx.video_processor.get_pending_results(
+                min_confidence=min_confidence,
+            )
 
             if detections:
                 st.session_state.record_store.add_many(
@@ -259,7 +263,9 @@ def render_camera_live(alpr, min_confidence, cooldown_seconds):
                     cooldown_seconds=cooldown_seconds,
                 )
 
-            df = st.session_state.record_store.to_dataframe()
+            df = st.session_state.record_store.to_dataframe(
+                min_confidence=min_confidence,
+            )
 
             with result_placeholder.container():
                 if df.empty:
@@ -355,7 +361,7 @@ def main():
             )
 
     with right_col:
-        render_records_panel()
+        render_records_panel(min_confidence=min_confidence)
 
 
 if __name__ == "__main__":

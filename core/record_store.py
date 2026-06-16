@@ -26,6 +26,9 @@ class PlateRecordStore:
         min_confidence: float,
         cooldown_seconds: int,
     ):
+        confidence = float(confidence)
+        min_confidence = float(min_confidence)
+
         if confidence < min_confidence:
             return
 
@@ -62,11 +65,16 @@ class PlateRecordStore:
                 cooldown_seconds=cooldown_seconds,
             )
 
-    def to_dataframe(self):
-        return pd.DataFrame(self.records)
+    def to_dataframe(self, min_confidence: float | None = None):
+        df = pd.DataFrame(self.records)
 
-    def to_csv_bytes(self):
-        df = self.to_dataframe()
+        if min_confidence is None or df.empty:
+            return df
+
+        return df[df["confidence"] >= float(min_confidence)].reset_index(drop=True)
+
+    def to_csv_bytes(self, min_confidence: float | None = None):
+        df = self.to_dataframe(min_confidence=min_confidence)
         return df.to_csv(index=False).encode("utf-8")
 
     def clear(self):
