@@ -25,7 +25,7 @@ def load_model():
 
 def init_session_state():
     if "record_store" not in st.session_state:
-        st.session_state.record_store = PlateRecordStore()
+        st.session_state.record_store = PlateRecordStore.persistent()
 
 
 def render_header():

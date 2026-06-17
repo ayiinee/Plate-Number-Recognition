@@ -1,5 +1,6 @@
 from core.plate_parser import is_valid_indonesian_plate
 from core.record_store import PlateRecordStore
+from core.storage import DetectionStorage
 
 
 def test_valid_indonesian_plate_formats():
@@ -16,7 +17,7 @@ def test_invalid_indonesian_plate_formats():
 
 
 def test_store_skips_invalid_plate():
-    store = PlateRecordStore()
+    store = PlateRecordStore(storage=DetectionStorage(":memory:"))
 
     store.add_detection(
         plate="PLAT123",
@@ -30,7 +31,7 @@ def test_store_skips_invalid_plate():
 
 
 def test_store_accepts_valid_plate():
-    store = PlateRecordStore()
+    store = PlateRecordStore(storage=DetectionStorage(":memory:"))
 
     store.add_detection(
         plate="B1234CD",
@@ -42,3 +43,35 @@ def test_store_accepts_valid_plate():
 
     assert len(store.records) == 1
     assert store.records[0]["plat_nomor"] == "B1234CD"
+
+
+def test_store_skips_low_confidence():
+    store = PlateRecordStore(storage=DetectionStorage(":memory:"))
+
+    store.add_detection(
+        plate="B1234CD",
+        confidence=0.49,
+        source_name="Kamera",
+        min_confidence=0.5,
+        cooldown_seconds=5,
+    )
+
+    assert len(store.records) == 0
+
+
+def test_storage_exports_csv():
+    storage = DetectionStorage(":memory:")
+    store = PlateRecordStore(storage=storage)
+
+    store.add_detection(
+        plate="B1234CD",
+        confidence=0.9,
+        source_name="Kamera",
+        min_confidence=0.5,
+        cooldown_seconds=5,
+    )
+
+    csv_bytes = store.to_csv_bytes(min_confidence=0.5)
+
+    assert b"B1234CD" in csv_bytes
+    assert b"Kamera" in csv_bytes

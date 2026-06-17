@@ -12,6 +12,19 @@ def normalize_plate(text: str) -> str:
     return text
 
 
+def is_valid_indonesian_plate(plate: str) -> bool:
+    if not plate:
+        return False
+
+    plate = str(plate).upper().strip()
+
+    if not plate:
+        return False
+
+    pattern = r"^[A-Z]{1,2}[0-9]{1,4}[A-Z]{0,3}$"
+    return bool(re.fullmatch(pattern, plate))
+
+
 def get_attr_or_key(obj, name, default=None):
     if obj is None:
         return default
