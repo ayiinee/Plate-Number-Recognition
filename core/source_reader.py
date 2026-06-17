@@ -1,6 +1,12 @@
+import logging
+from pathlib import Path
+
 import cv2
 
 from core.source_resolver import ResolvedSource
+
+
+logger = logging.getLogger(__name__)
 
 
 class SourceReader:
@@ -10,11 +16,34 @@ class SourceReader:
         self.cap = None
 
     def open(self):
+        if self.resolved_source.mode == "demo":
+            demo_path = Path(self.resolved_source.source)
+
+            if not demo_path.exists():
+                message = f"Video demo tidak ditemukan: {demo_path}"
+                logger.error(
+                    "%s camera_id=%s",
+                    message,
+                    self.resolved_source.camera_id,
+                )
+                raise RuntimeError(message)
+
+        logger.info(
+            "Membuka source camera_id=%s mode=%s source=%s",
+            self.resolved_source.camera_id,
+            self.resolved_source.mode,
+            self.resolved_source.source,
+        )
         self.cap = cv2.VideoCapture(self.resolved_source.source)
 
         if not self.cap.isOpened():
+            logger.error(
+                "Source tidak bisa dibuka camera_id=%s source=%s",
+                self.resolved_source.camera_id,
+                self.resolved_source.source,
+            )
             raise RuntimeError(
-                f"Source tidak bisa dibuka: {self.resolved_source.camera_id}"
+                f"Source tidak bisa dibuka: {self.resolved_source.camera_id} ({self.resolved_source.source})"
             )
 
     def read(self):
@@ -27,6 +56,10 @@ class SourceReader:
             return True, frame
 
         if self.resolved_source.mode == "demo" and self.loop_demo:
+            logger.info(
+                "Video demo selesai, loop ulang camera_id=%s",
+                self.resolved_source.camera_id,
+            )
             self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
             return self.cap.read()
 
@@ -34,6 +67,7 @@ class SourceReader:
 
     def release(self):
         if self.cap is not None:
+            logger.info("Menutup source camera_id=%s", self.resolved_source.camera_id)
             self.cap.release()
             self.cap = None
 

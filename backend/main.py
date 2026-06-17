@@ -1,4 +1,5 @@
 import time
+import logging
 from dataclasses import asdict, is_dataclass
 from typing import Any
 
@@ -7,9 +8,12 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
+from core.logging_config import configure_logging
 from core.stream_manager import StreamManager
 
 
+configure_logging()
+logger = logging.getLogger(__name__)
 app = FastAPI(title="ANPR Multi Camera Backend")
 manager = StreamManager()
 
@@ -46,6 +50,7 @@ def health():
         message="Backend aktif.",
         data={
             "service": "anpr-backend",
+            "sources": serialize(manager.config.get("sources", {})),
             "workers": serialize(manager.get_status()),
         },
     )
@@ -55,7 +60,9 @@ def health():
 def start_workers():
     try:
         manager.start_all()
+        logger.info("Semua worker kamera dijalankan")
     except Exception as exc:
+        logger.exception("Gagal menjalankan semua worker")
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     return api_response(
@@ -68,6 +75,7 @@ def start_workers():
 @app.post("/workers/stop")
 def stop_workers():
     manager.stop_all()
+    logger.info("Semua worker kamera dihentikan")
 
     return api_response(
         success=True,
@@ -80,9 +88,11 @@ def stop_workers():
 def start_worker(camera_id: str):
     try:
         manager.start_worker(camera_id)
+        logger.info("Worker dijalankan camera_id=%s", camera_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
+        logger.exception("Gagal menjalankan worker camera_id=%s", camera_id)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     return api_response(
@@ -95,6 +105,7 @@ def start_worker(camera_id: str):
 @app.post("/workers/{camera_id}/stop")
 def stop_worker(camera_id: str):
     manager.stop_worker(camera_id)
+    logger.info("Worker dihentikan camera_id=%s", camera_id)
 
     return api_response(
         success=True,
@@ -149,6 +160,7 @@ def set_source_mode(camera_id: str, request: SourceModeRequest):
     try:
         manager.set_mode(camera_id, request.mode)
         resolved_source = manager.resolver.resolve(camera_id)
+        logger.info("Mode source diubah camera_id=%s mode=%s", camera_id, request.mode)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:

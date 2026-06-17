@@ -90,6 +90,29 @@ def get_camera_configs():
     return config.get("sources", {})
 
 
+def resolve_runtime_camera_configs(local_cameras: dict, health_data: dict | None) -> dict:
+    if not health_data:
+        return local_cameras
+
+    runtime_cameras = health_data.get("sources") or {}
+
+    if not runtime_cameras:
+        return local_cameras
+
+    merged = {
+        camera_id: {
+            **camera_config,
+            **runtime_cameras.get(camera_id, {}),
+        }
+        for camera_id, camera_config in local_cameras.items()
+    }
+
+    for camera_id, camera_config in runtime_cameras.items():
+        merged.setdefault(camera_id, camera_config)
+
+    return merged
+
+
 def render_header():
     st.markdown(
         """
@@ -166,6 +189,8 @@ def render_styles():
 def render_controls(base_url: str, cameras: dict):
     st.sidebar.header("Backend")
     health = api_get(base_url, "/health")
+    health_data = health.get("data", {}) if health.get("success") else {}
+    runtime_cameras = resolve_runtime_camera_configs(cameras, health_data)
 
     if health.get("success"):
         st.sidebar.success("Backend aktif")
@@ -191,7 +216,7 @@ def render_controls(base_url: str, cameras: dict):
     st.sidebar.divider()
     st.sidebar.header("Mode Kamera")
 
-    for camera_id, camera_config in cameras.items():
+    for camera_id, camera_config in runtime_cameras.items():
         current_mode = str(camera_config.get("mode", "demo"))
         selected_mode = st.sidebar.radio(
             camera_config.get("name", camera_id),
@@ -211,7 +236,10 @@ def render_controls(base_url: str, cameras: dict):
             )
             st.rerun()
 
-    return health.get("data", {}).get("workers", {}) if health.get("success") else {}
+    return (
+        health_data.get("workers", {}) if health.get("success") else {},
+        runtime_cameras,
+    )
 
 
 def render_camera_grid(base_url: str, cameras: dict, worker_status: dict, latest_events: dict):
@@ -250,6 +278,9 @@ def format_camera_status(camera_id: str, status: dict, latest: dict) -> str:
     connected = "Terhubung" if status.get("connected") else "Belum terhubung"
     last_plate = latest.get("plate_text") or "-"
     confidence = latest.get("confidence")
+    last_error = status.get("last_error") or "-"
+    inference_ms = status.get("last_inference_ms")
+    inference_text = f"{float(inference_ms):.2f} ms" if inference_ms is not None else "-"
 
     if confidence is not None:
         last_plate = f"{last_plate} ({float(confidence):.2f})"
@@ -258,7 +289,9 @@ def format_camera_status(camera_id: str, status: dict, latest: dict) -> str:
     <div class="status-line">
         <b>{camera_id}</b> | Worker: {running} | Source: {connected}<br/>
         Frame: {status.get("frame_count", 0)} | Diproses: {status.get("processed_frame_count", 0)}<br/>
-        Plat terakhir: {last_plate}
+        Inference terakhir: {inference_text}<br/>
+        Plat terakhir: {last_plate}<br/>
+        Error terakhir: {last_error}
     </div>
     """
 
@@ -408,8 +441,8 @@ def main():
     if st.sidebar.button("Refresh Data", use_container_width=True):
         st.rerun()
 
-    cameras = get_camera_configs()
-    worker_status = render_controls(base_url, cameras)
+    local_cameras = get_camera_configs()
+    worker_status, cameras = render_controls(base_url, local_cameras)
     latest_events = render_events_table(base_url, cameras, min_confidence)
     render_camera_grid(base_url, cameras, worker_status, latest_events)
 

@@ -1,3 +1,4 @@
+import logging
 import threading
 import time
 from dataclasses import dataclass
@@ -7,6 +8,9 @@ from core.event_processor import DetectionEvent, EventProcessor
 from core.plate_parser import extract_plate_results
 from core.source_reader import SourceReader
 from core.source_resolver import ResolvedSource
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -19,6 +23,7 @@ class StreamWorkerStatus:
     processed_frame_count: int
     last_error: str | None = None
     last_event: DetectionEvent | None = None
+    last_inference_ms: float | None = None
 
 
 class StreamWorker:
@@ -59,8 +64,10 @@ class StreamWorker:
 
     def start(self):
         if self.is_running():
+            logger.info("Worker sudah berjalan camera_id=%s", self.resolved_source.camera_id)
             return
 
+        logger.info("Menjalankan worker camera_id=%s", self.resolved_source.camera_id)
         self._running.set()
         self._set_status(running=True, last_error=None)
         self._thread = threading.Thread(
@@ -78,6 +85,7 @@ class StreamWorker:
 
         self.reader.release()
         self._set_status(running=False, connected=False)
+        logger.info("Worker dihentikan camera_id=%s", self.resolved_source.camera_id)
 
     def run(self, max_frames: int | None = None):
         processed_in_run = 0
@@ -91,11 +99,19 @@ class StreamWorker:
             except Exception as exc:
                 self.reader.release()
                 self._set_status(connected=False, last_error=str(exc))
+                logger.exception(
+                    "Worker source error camera_id=%s",
+                    self.resolved_source.camera_id,
+                )
                 time.sleep(self.reconnect_delay_seconds)
                 continue
 
             if not ret:
                 self._set_status(connected=False, last_error="Frame tidak tersedia")
+                logger.warning(
+                    "Frame tidak tersedia camera_id=%s",
+                    self.resolved_source.camera_id,
+                )
                 time.sleep(self.reconnect_delay_seconds)
                 continue
 
@@ -144,10 +160,12 @@ class StreamWorker:
         return self._running.is_set() and self._thread is not None and self._thread.is_alive()
 
     def _process_frame(self, frame):
+        start_time = time.perf_counter()
         annotated_frame, raw_results = self.predict_func(
             alpr=self.alpr,
             frame=frame,
         )
+        inference_ms = (time.perf_counter() - start_time) * 1000
         detections = self.extract_func(raw_results)
         events = self.event_processor.process_detections(
             detections=detections,
@@ -159,6 +177,14 @@ class StreamWorker:
 
         self._set_latest_frame(annotated_frame)
         self._increment_processed_frame_count()
+        self._set_status(last_inference_ms=round(inference_ms, 2))
+        logger.info(
+            "Inference selesai camera_id=%s inference_ms=%.2f detections=%s accepted_events=%s",
+            self.resolved_source.camera_id,
+            inference_ms,
+            len(detections),
+            len(events),
+        )
 
         if events:
             self._set_status(last_event=events[-1])

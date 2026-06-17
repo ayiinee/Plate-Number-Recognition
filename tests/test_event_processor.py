@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 import numpy as np
@@ -42,7 +43,7 @@ def test_event_processor_rejects_invalid_plate():
     assert storage.get_detections() == []
 
 
-def test_event_processor_rejects_low_confidence():
+def test_event_processor_rejects_low_confidence(caplog):
     storage = DetectionStorage(":memory:")
     processor = EventProcessor(
         storage=storage,
@@ -50,15 +51,17 @@ def test_event_processor_rejects_low_confidence():
         save_snapshots=False,
     )
 
-    events = processor.process_detections(
-        detections=[{"plate": "B1234CD", "confidence": 0.7}],
-        camera_id="cam_1",
-        camera_name="Kamera 1",
-        source_type="demo",
-    )
+    with caplog.at_level(logging.INFO):
+        events = processor.process_detections(
+            detections=[{"plate": "B1234CD", "confidence": 0.7}],
+            camera_id="cam_1",
+            camera_name="Kamera 1",
+            source_type="demo",
+        )
 
     assert events == []
     assert storage.get_detections() == []
+    assert "low confidence" in caplog.text
 
 
 def test_event_processor_deduplicates_by_camera_and_plate():

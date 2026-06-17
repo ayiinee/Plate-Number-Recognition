@@ -64,6 +64,7 @@ def test_stream_worker_processes_frame_after_frame_skip():
     assert status.frame_count == 2
     assert status.processed_frame_count == 1
     assert status.last_event is not None
+    assert status.last_inference_ms is not None
     assert storage.get_latest_by_camera("cam_1")["plate_text"] == "B1234CD"
 
 

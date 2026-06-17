@@ -1,4 +1,5 @@
 import time
+import logging
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
@@ -11,6 +12,7 @@ from core.storage import DetectionStorage
 
 
 DEFAULT_SNAPSHOT_DIR = Path("outputs") / "snapshots"
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -79,9 +81,22 @@ class EventProcessor:
         confidence = float(detection.get("confidence", 0.0))
 
         if confidence < self.min_confidence:
+            logger.info(
+                "Detection rejected: low confidence camera_id=%s plate=%s confidence=%.4f threshold=%.4f",
+                camera_id,
+                plate_text,
+                confidence,
+                self.min_confidence,
+            )
             return None
 
         if not is_valid_indonesian_plate(plate_text):
+            logger.info(
+                "Detection rejected: invalid plate camera_id=%s plate=%s confidence=%.4f",
+                camera_id,
+                plate_text,
+                confidence,
+            )
             return None
 
         key = (camera_id, plate_text)
@@ -89,6 +104,12 @@ class EventProcessor:
         last_time = self.last_seen.get(key, 0)
 
         if now - last_time < self.cooldown_seconds:
+            logger.info(
+                "Detection rejected: cooldown camera_id=%s plate=%s remaining=%.2fs",
+                camera_id,
+                plate_text,
+                self.cooldown_seconds - (now - last_time),
+            )
             return None
 
         self.last_seen[key] = now
@@ -112,6 +133,13 @@ class EventProcessor:
         )
 
         self.storage.insert_detection(asdict(event))
+        logger.info(
+            "Detection accepted camera_id=%s plate=%s confidence=%.4f snapshot=%s",
+            camera_id,
+            plate_text,
+            event.confidence,
+            snapshot_path,
+        )
 
         return event
 
@@ -132,6 +160,8 @@ class EventProcessor:
         success = cv2.imwrite(str(path), frame)
 
         if not success:
+            logger.warning("Snapshot gagal disimpan path=%s", path)
             return None
 
+        logger.info("Snapshot tersimpan path=%s", path)
         return str(path)
