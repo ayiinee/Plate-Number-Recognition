@@ -1,0 +1,31 @@
+app:
+  name: ANPR Multi Camera System
+  environment: development
+
+model:
+  detector: yolo-v9-t-384-license-plate-end2end
+  ocr: cct-xs-v2-global-model
+  provider: cpu
+
+processing:
+  frame_skip: 5
+  min_confidence: 0.70
+  cooldown_seconds: 5
+  queue_size: 2
+
+storage:
+  database_path: outputs/detections.db
+  snapshot_dir: outputs/snapshots
+
+sources:
+  cam_1:
+    name: Kamera 1 - Gate Masuk
+    mode: demo
+    live_url: rtsp://user:password@192.168.1.10/stream
+    demo_path: data/demo_cam_1.mp4
+
+  cam_2:
+    name: Kamera 2 - Gate Keluar
+    mode: demo
+    live_url: rtsp://user:password@192.168.1.11/stream
+    demo_path: data/demo_cam_2.mp4

@@ -7,3 +7,4 @@ venv/
 outputs/
 data/*.mp4
 data/*.avi
+.tmp/
