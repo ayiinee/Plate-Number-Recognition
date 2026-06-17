@@ -8,3 +8,5 @@ outputs/
 data/*.mp4
 data/*.avi
 .tmp/
+.pytest_cache/
+pytest-cache-files-*/

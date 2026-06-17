@@ -5,3 +5,6 @@ fast-alpr[onnx]
 pandas
 av
 numpy
+fastapi
+uvicorn[standard]
+pytest

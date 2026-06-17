@@ -52,8 +52,9 @@ def test_source_resolver_can_switch_to_live():
     assert source.source_type == "live"
 
 
-def test_load_config_supports_custom_yaml(tmp_path):
-    config_path = Path(tmp_path) / "config.yaml"
+def test_load_config_supports_custom_yaml():
+    config_path = Path(".tmp") / "test_config.yaml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text(
         """
 sources:
