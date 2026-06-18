@@ -1,4 +1,5 @@
 from datetime import date
+from html import escape
 from urllib.error import URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -12,6 +13,7 @@ from core.config import load_config
 
 
 DEFAULT_BACKEND_URL = "http://127.0.0.1:8000"
+CAMERA_PANEL_HEIGHT = 500
 
 
 st.set_page_config(
@@ -170,6 +172,7 @@ def render_styles():
             color: #4B5563;
             font-size: 0.85rem;
             margin-top: 0.5rem;
+            overflow-wrap: anywhere;
         }
         div[data-testid="stSidebar"] {
             background: #FFFFFF;
@@ -250,27 +253,59 @@ def render_camera_grid(base_url: str, cameras: dict, worker_status: dict, latest
         latest = latest_events.get(camera_id) or {}
 
         with camera_columns[index]:
-            st.markdown('<div class="camera-panel">', unsafe_allow_html=True)
-            st.markdown(
-                f'<div class="camera-title">{camera_config.get("name", camera_id)}</div>',
-                unsafe_allow_html=True,
+            render_camera_panel(
+                title=camera_config.get("name", camera_id),
+                stream_url=build_url(base_url, f"/stream/{camera_id}"),
+                status_html=format_camera_status(camera_id, status, latest),
             )
-            render_mjpeg_stream(build_url(base_url, f"/stream/{camera_id}"))
-            st.markdown(
-                format_camera_status(camera_id, status, latest),
-                unsafe_allow_html=True,
-            )
-            st.markdown("</div>", unsafe_allow_html=True)
 
 
-def render_mjpeg_stream(stream_url: str):
+def render_camera_panel(title: str, stream_url: str, status_html: str):
     html = f"""
-    <img
-        src="{stream_url}"
-        style="width: 100%; aspect-ratio: 16 / 9; object-fit: contain; background: #111827; border-radius: 8px;"
-    />
+    <style>
+        body {{
+            margin: 0;
+            background: transparent;
+            font-family: "Source Sans Pro", sans-serif;
+        }}
+        .camera-panel {{
+            border: 1px solid #E5E7EB;
+            border-radius: 8px;
+            padding: 0.75rem;
+            background: #FFFFFF;
+            box-sizing: border-box;
+            margin-top:16px;
+            margin-bottom:16px;
+        }}
+        .camera-title {{
+            color: #111827;
+            font-size: 1rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }}
+        .camera-stream {{
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            object-fit: contain;
+            background: #111827;
+            border-radius: 8px;
+            display: block;
+        }}
+        .status-line {{
+            color: #4B5563;
+            font-size: 0.85rem;
+            line-height: 1.45;
+            margin-top: 0.5rem;
+            overflow-wrap: anywhere;
+        }}
+    </style>
+    <div class="camera-panel">
+        <div class="camera-title">{escape(str(title))}</div>
+        <img class="camera-stream" src="{escape(stream_url, quote=True)}" />
+        {status_html}
+    </div>
     """
-    components.html(html, height=310)
+    components.html(html, height=CAMERA_PANEL_HEIGHT)
 
 
 def format_camera_status(camera_id: str, status: dict, latest: dict) -> str:
@@ -287,11 +322,11 @@ def format_camera_status(camera_id: str, status: dict, latest: dict) -> str:
 
     return f"""
     <div class="status-line">
-        <b>{camera_id}</b> | Worker: {running} | Source: {connected}<br/>
+        <b>{escape(str(camera_id))}</b> | Worker: {running} | Source: {connected}<br/>
         Frame: {status.get("frame_count", 0)} | Diproses: {status.get("processed_frame_count", 0)}<br/>
         Inference terakhir: {inference_text}<br/>
-        Plat terakhir: {last_plate}<br/>
-        Error terakhir: {last_error}
+        Plat terakhir: {escape(str(last_plate))}<br/>
+        Error terakhir: {escape(str(last_error))}
     </div>
     """
 
@@ -332,19 +367,12 @@ def metric_tile(label: str, value):
     )
 
 
-def render_events_table(base_url: str, cameras: dict, min_confidence: float):
-    events_response = api_get(
-        base_url,
-        "/events",
-        {"limit": 1000, "min_confidence": min_confidence},
-    )
-    latest_response = api_get(base_url, "/events/latest")
-
-    events = events_response.get("data") if events_response.get("success") else []
-    latest_events = latest_response.get("data") if latest_response.get("success") else {}
-    df = pd.DataFrame(events or [])
-
-    render_summary(df, latest_events)
+def render_events_table(
+    base_url: str,
+    cameras: dict,
+    min_confidence: float,
+    df: pd.DataFrame,
+):
     st.subheader("Riwayat Deteksi")
 
     filter_col1, filter_col2, filter_col3 = st.columns([1, 1, 2])
@@ -385,9 +413,6 @@ def render_events_table(base_url: str, cameras: dict, min_confidence: float):
         mime="text/csv",
         disabled=not bool(csv_bytes),
     )
-
-    return latest_events
-
 
 def filter_events_dataframe(
     df: pd.DataFrame,
@@ -443,8 +468,20 @@ def main():
 
     local_cameras = get_camera_configs()
     worker_status, cameras = render_controls(base_url, local_cameras)
-    latest_events = render_events_table(base_url, cameras, min_confidence)
+    events_response = api_get(
+        base_url,
+        "/events",
+        {"limit": 1000, "min_confidence": min_confidence},
+    )
+    latest_response = api_get(base_url, "/events/latest")
+
+    events = events_response.get("data") if events_response.get("success") else []
+    events_df = pd.DataFrame(events or [])
+    latest_events = latest_response.get("data") if latest_response.get("success") else {}
+
+    render_summary(events_df, latest_events)
     render_camera_grid(base_url, cameras, worker_status, latest_events)
+    render_events_table(base_url, cameras, min_confidence, events_df)
 
 
 if __name__ == "__main__":
